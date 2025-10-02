@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 )
+
 // `import` 语句用于引入其他包。它类似于 C 的 `#include <stdio.h>`。
 // Go 的标准库被分成了很多包，`fmt` 用于格式化 I/O (类似 stdio)，`errors` 用于创建错误对象。
 // Go 会严格检查：引入了但未使用的包会导致编译错误。
@@ -150,8 +151,8 @@ func main() {
 
 	// b) 切片 (Slice): 动态长度，引用类型 (更常用)
 	// 你可以把它看作 C++ 的 vector 或 Python 的 list
-	slice := []int{10, 20, 30}               // 创建一个切片
-	slice = append(slice, 40)                 // 动态添加元素
+	slice := []int{10, 20, 30} // 创建一个切片
+	slice = append(slice, 40)  // 动态添加元素
 	fmt.Printf("数组: %v, 切片: %v\n", arr, slice)
 
 	// for...range 循环是遍历数组、切片、map 的最佳方式
@@ -192,6 +193,6 @@ func main() {
 	// --- 调用结构体方法 ---
 	fmt.Println("\n--- 结构体与方法 ---")
 	r := Rect{Width: 10, Height: 5}
-	fmt.Printf("矩形 r 的信息: %+v\n", r) // %+v 会打印字段名和值
+	fmt.Printf("矩形 r 的信息: %+v\n", r)    // %+v 会打印字段名和值
 	fmt.Println("矩形 r 的面积是:", r.Area()) //像调用对象方法一样调用
 }
