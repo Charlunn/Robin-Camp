@@ -1,0 +1,2 @@
+*.sh text eol=lf
+cinema/*.sh text eol=lf
