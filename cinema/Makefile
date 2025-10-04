@@ -7,4 +7,4 @@ docker-down:
 	docker compose down -v
 
 test-e2e:
-	./e2e-test.sh
+        ../e2e-test.sh

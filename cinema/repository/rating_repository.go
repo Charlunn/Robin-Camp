@@ -1,11 +1,11 @@
 package repository
 
 import (
-    "cinema/model"
-    "context"
+	"cinema/model"
+	"context"
 )
 
 type RatingRepository interface {
-    Upsert(ctx context.Context, rating *model.Rating) (bool, error)
-    AggregateByMovieID(ctx context.Context, movieID string) (float64, int, error)
+	Upsert(ctx context.Context, rating *model.Rating) (bool, error)
+	AggregateByMovieID(ctx context.Context, movieID string) (float64, int, error)
 }
