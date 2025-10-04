@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>电影探索者 - Movies Explorer</title>
+    <!-- 引入 Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* 使用 Noto Sans SC 支持中文，Inter 支持数字和英文 */
+        body {
+            font-family: 'Inter', 'Noto Sans SC', sans-serif;
+            background-color: #111827; /* 深色背景 */
+            color: #f3f4f6;
+        }
+        /* 电影卡片 hover 效果 */
+        .movie-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+        }
+        /* 按钮渐变色 */
+        .search-button {
+            transition: all 0.3s ease;
+            background-image: linear-gradient(to right, #4f46e5 0%, #7c3aed 100%);
+        }
+        .search-button:hover {
+            background-image: linear-gradient(to right, #6366f1 0%, #8b5cf6 100%);
+            transform: scale(1.02);
+        }
+        /* 模态框背景 */
+        .modal-backdrop {
+            background-color: rgba(0, 0, 0, 0.7);
+        }
+        
+        /* ------------------------------------------------ */
+        /* 星级评分修复: 移除间隙并修复半星逻辑                 */
+        /* ------------------------------------------------ */
+        .star-rating-container {
+            direction: rtl; /* 倒序排列星星，方便从右往左选择 */
+            display: inline-flex;
+            gap: 0; /* 移除间隙 */
+            line-height: 1; /* 确保星星居中且无额外行高 */
+        }
+        .star-rating-container input[type="radio"] {
+            display: none;
+        }
+        /* 星星的通用样式 */
+        .star-rating-container label {
+            cursor: pointer;
+            width: 1.25rem; /* 20px */
+            height: 2.5rem; /* 40px */
+            overflow: hidden;
+            color: #4b5563; /* 默认灰色 */
+            transition: color 0.2s;
+            position: relative;
+        }
+        /* 星星图标 */
+        .star-rating-container label::before {
+            content: '★';
+            display: block;
+            width: 100%;
+            font-size: 2.5rem; /* 星星大小 */
+            line-height: 1;
+        }
+        /* 奇数标签 (0.5, 1.5, ...) 负责左半星 */
+        .star-rating-container label:nth-of-type(odd) {
+            width: 1.25rem; /* 20px, 保持全宽 */
+        }
+        /* 偶数标签 (1.0, 2.0, ...) 负责右半星 */
+        .star-rating-container label:nth-of-type(even) {
+            width: 1.25rem; /* 20px, 保持全宽 */
+        }
+        /* 通过改变 margin 来控制半星的显示范围 */
+        .star-rating-container label:nth-of-type(odd)::before {
+            margin-left: -100%; /* 显示左半边（半星）*/
+        }
+        .star-rating-container label:nth-of-type(even)::before {
+            margin-right: -100%; /* 显示右半边（半星）*/
+        }
+        /* 悬停/选中时的颜色 */
+        .star-rating-container input:checked ~ label,
+        .star-rating-container label:hover,
+        .star-rating-container label:hover ~ label {
+            color: #fde047; /* 黄色 */
+        }
+        /* ------------------------------------------------ */
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- 应用头部 -->
+    <header class="bg-gray-900 shadow-xl sticky top-0 z-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+            <h1 class="text-3xl font-extrabold text-indigo-400 tracking-tight">
+                🎬 电影探索者
+            </h1>
+            <!-- 管理员入口按钮 -->
+            <button id="admin-entry-button" onclick="showAdminLoginModal()" class="px-4 py-2 bg-pink-600 rounded-lg text-white font-semibold hover:bg-pink-700 transition duration-150">
+                <span id="admin-status-text">管理员入口</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+        <!-- 搜索与筛选栏 -->
+        <section class="mb-10 p-6 bg-gray-800 rounded-xl shadow-2xl">
+            <h2 class="text-xl font-bold mb-4 text-white border-b border-gray-700 pb-2">电影搜索</h2>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                
+                <!-- 关键词搜索 (q) -->
+                <div>
+                    <label for="search-query" class="block text-sm font-medium text-gray-300 mb-1">标题/关键词</label>
+                    <input type="text" id="search-query" placeholder="例如: Inception" class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-white" />
+                </div>
+
+                <!-- 年份 (year) -->
+                <div>
+                    <label for="search-year" class="block text-sm font-medium text-gray-300 mb-1">发行年份</label>
+                    <input type="number" id="search-year" placeholder="例如: 2010" min="1800" max="2100" class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-white" />
+                </div>
+
+                <!-- 类型 (genre) -->
+                <div>
+                    <label for="search-genre" class="block text-sm font-medium text-gray-300 mb-1">电影类型</label>
+                    <select id="search-genre" class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-indigo-500 focus:border-indigo-500 text-white appearance-none">
+                        <option value="">所有类型</option>
+                        <option value="Sci-Fi">Sci-Fi (科幻)</option>
+                        <option value="Action">Action (动作)</option>
+                        <option value="Drama">Drama (剧情)</option>
+                        <option value="Crime">Crime (犯罪)</option>
+                        <option value="Adventure">Adventure (冒险)</option>
+                    </select>
+                </div>
+                
+                <!-- 搜索按钮 -->
+                <div class="flex items-end">
+                    <button onclick="performSearch()" class="search-button w-full p-3 rounded-lg text-white font-semibold shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-800">
+                        <span id="search-status">搜索电影</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        <!-- 电影列表结果区 -->
+        <section>
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-white">搜索结果 <span id="movie-count" class="text-indigo-400 font-extrabold ml-2"></span></h2>
+                <div id="loading-indicator" class="hidden flex items-center space-x-2 text-indigo-400 font-medium">
+                    <svg class="animate-spin h-5 w-5 text-indigo-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>加载中...</span>
+                </div>
+            </div>
+            
+            <!-- 电影卡片容器 -->
+            <div id="movie-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                <!-- 电影卡片将在此处被渲染 -->
+            </div>
+            
+            <!-- 无结果提示 -->
+            <div id="no-results" class="hidden text-center py-12">
+                <p class="text-gray-400 text-xl">😔 未找到符合条件的电影。</p>
+                <p class="text-gray-500 mt-2">请尝试更改您的搜索条件或检查后端服务是否运行在 **http://localhost:8080**。</p>
+            </div>
+        </section>
+
+        <!-- 分页控制 (基于 API 文档中的 cursor 概念) -->
+        <section class="mt-10 flex justify-center space-x-4">
+            <button id="prev-page" class="px-6 py-3 bg-gray-700 rounded-lg text-gray-300 font-semibold transition duration-150 disabled:opacity-50" disabled>
+                上一页
+            </button>
+            <button id="next-page" onclick="goToNextPage()" class="px-6 py-3 bg-indigo-600 rounded-lg text-white font-semibold hover:bg-indigo-700 transition duration-150 disabled:opacity-50" disabled>
+                下一页
+            </button>
+        </section>
+        
+        <!-- 消息提示框 -->
+        <div id="error-message-box" class="fixed bottom-4 right-4 p-4 bg-red-600 text-white rounded-lg shadow-xl hidden transition-opacity duration-300 opacity-0" role="alert">
+            <span id="error-text"></span>
+        </div>
+        <div id="success-message-box" class="fixed bottom-4 right-4 p-4 bg-green-600 text-white rounded-lg shadow-xl hidden transition-opacity duration-300 opacity-0" role="alert">
+            <span id="success-text"></span>
+        </div>
+    </main>
+
+    <!-- 1. 评分/Rater ID 模态框 -->
+    <div id="rating-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-lg mx-4 transform transition-all">
+            <h3 class="text-2xl font-bold text-white mb-4 border-b border-gray-700 pb-2">提交电影评分</h3>
+            <p class="text-gray-400 mb-4">电影标题: <strong id="modal-movie-title" class="text-indigo-400"></strong></p>
+            
+            <!-- Rater ID 输入 (仅在未设置时显示) -->
+            <div id="rater-id-prompt" class="space-y-4 mb-4 p-4 bg-gray-700 rounded-lg border border-yellow-500 hidden">
+                <label for="modal-rater-id" class="block text-sm font-medium text-yellow-300">请输入您的 Rater ID (X-Rater-Id)</label>
+                <input type="text" id="modal-rater-id" placeholder="例如: user_abc" class="w-full p-3 rounded-lg bg-gray-600 border border-gray-500 focus:ring-yellow-500 text-white" />
+            </div>
+
+            <!-- 交互式星级评分 -->
+            <div class="mt-6 mb-8 text-center">
+                <p class="text-lg font-semibold text-white mb-3">您的评分:</p>
+                <div id="star-rating-area" class="star-rating-container mx-auto">
+                    <!-- 动态生成 10 个半星输入 -->
+                </div>
+                <p id="current-rating-value" class="text-xl font-extrabold mt-3 text-yellow-400">0.0 / 5.0</p>
+            </div>
+
+            <!-- 按钮 -->
+            <div class="flex justify-end space-x-3">
+                <button onclick="closeRatingModal()" class="px-5 py-2 bg-gray-600 rounded-lg text-white hover:bg-gray-700 transition">取消</button>
+                <button id="submit-rating-btn" onclick="handleRatingSubmission()" class="px-5 py-2 bg-blue-600 rounded-lg text-white font-semibold hover:bg-blue-700 transition">确认提交</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 2. 管理员登录模态框 -->
+    <div id="admin-login-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-md mx-4 transform transition-all">
+            <h3 class="text-2xl font-bold text-white mb-4 border-b border-gray-700 pb-2">管理员登录</h3>
+            
+            <div id="admin-logout-area" class="space-y-4 mb-4 hidden">
+                <p class="text-green-400 text-lg font-semibold">您已登录管理员身份。</p>
+                <button onclick="showAddMovieModal()" class="w-full p-3 bg-indigo-600 rounded-lg text-white font-semibold hover:bg-indigo-700 transition">
+                    添加新电影
+                </button>
+                <button onclick="adminLogout()" class="w-full p-3 bg-gray-600 rounded-lg text-white hover:bg-gray-700 transition">
+                    退出管理员
+                </button>
+            </div>
+
+            <div id="admin-login-area" class="space-y-4 mb-4">
+                <label for="admin-key-input" class="block text-sm font-medium text-gray-300">管理员私钥 (作为 Bearer Token)</label>
+                <input type="password" id="admin-key-input" placeholder="输入私钥..." class="w-full p-3 rounded-lg bg-gray-700 border border-gray-600 focus:ring-pink-500 text-white" />
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button onclick="closeAdminLoginModal()" class="px-5 py-2 bg-gray-600 rounded-lg text-white hover:bg-gray-700 transition">取消</button>
+                    <button onclick="adminLogin()" class="px-5 py-2 bg-pink-600 rounded-lg text-white font-semibold hover:bg-pink-700 transition">登录</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. 添加电影模态框 -->
+    <div id="add-movie-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden modal-backdrop">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-lg mx-4 transform transition-all">
+            <h3 class="text-2xl font-bold text-white mb-4 border-b border-gray-700 pb-2">添加新电影</h3>
+            <form id="add-movie-form" class="space-y-4">
+                <div>
+                    <label for="movie-title" class="block text-sm font-medium text-gray-300">标题 <span class="text-red-500">*</span></label>
+                    <input type="text" id="movie-title" required class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white" />
+                </div>
+                <div>
+                    <label for="movie-genre" class="block text-sm font-medium text-gray-300">类型 <span class="text-red-500">*</span></label>
+                    <input type="text" id="movie-genre" required class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white" />
+                </div>
+                <div>
+                    <label for="movie-releaseDate" class="block text-sm font-medium text-gray-300">发行日期 <span class="text-red-500">*</span></label>
+                    <input type="date" id="movie-releaseDate" required class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white" />
+                </div>
+                <!-- 可选字段 -->
+                <div>
+                    <label for="movie-distributor" class="block text-sm font-medium text-gray-300">发行商</label>
+                    <input type="text" id="movie-distributor" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white" />
+                </div>
+                <div>
+                    <label for="movie-budget" class="block text-sm font-medium text-gray-300">预算 (USD)</label>
+                    <input type="number" id="movie-budget" min="0" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white" />
+                </div>
+                <div>
+                    <label for="movie-mpaRating" class="block text-sm font-medium text-gray-300">MPA 评级</label>
+                    <input type="text" id="movie-mpaRating" placeholder="例如: PG-13, R" class="w-full p-2 rounded-lg bg-gray-700 border border-gray-600 text-white" />
+                </div>
+            </form>
+
+            <div class="flex justify-end space-x-3 pt-6">
+                <button onclick="closeAddMovieModal()" class="px-5 py-2 bg-gray-600 rounded-lg text-white hover:bg-gray-700 transition">取消</button>
+                <button onclick="addMovie()" class="px-5 py-2 bg-indigo-600 rounded-lg text-white font-semibold hover:bg-indigo-700 transition">提交添加</button>
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        // --- 全局配置 ---
+        const API_BASE_URL = 'http://localhost:8080';
+        const API_MOVIES_ENDPOINT = '/movies';
+        const PAGE_SIZE = 12; 
+        const RATING_VALUES = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0];
+
+        // --- 状态变量 ---
+        let currentCursor = null; 
+        let raterId = localStorage.getItem('raterId') || '';
+        let adminToken = localStorage.getItem('adminToken') || ''; // 存储管理员 JWT/Token
+        let currentMovieId = ''; // 存储当前正在评分的电影ID
+        let currentMovieTitle = ''; // 存储当前正在评分的电影标题
+        let selectedRating = 0.0; // 存储模态框中选择的评分
+        
+        // --- DOM 元素引用 ---
+        const movieListContainer = document.getElementById('movie-list');
+        const searchButton = document.getElementById('search-status');
+        const nextButton = document.getElementById('next-page');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const noResultsElement = document.getElementById('no-results');
+        const movieCountElement = document.getElementById('movie-count');
+        const errorMessageBox = document.getElementById('error-message-box');
+        const errorText = document.getElementById('error-text');
+        const successMessageBox = document.getElementById('success-message-box');
+        const successText = document.getElementById('success-text');
+
+        // --- 辅助函数 ---
+
+        // 显示自定义成功消息框
+        function showCustomSuccess(message) {
+            successText.textContent = message;
+            successMessageBox.classList.remove('hidden');
+            setTimeout(() => successMessageBox.classList.add('opacity-100'), 10);
+            
+            setTimeout(() => {
+                successMessageBox.classList.remove('opacity-100');
+                setTimeout(() => successMessageBox.classList.add('hidden'), 300);
+            }, 4000);
+        }
+
+        // 显示自定义错误消息框
+        function showCustomAlert(message) {
+            errorText.textContent = message;
+            errorMessageBox.classList.remove('hidden');
+            setTimeout(() => errorMessageBox.classList.add('opacity-100'), 10);
+            
+            setTimeout(() => {
+                errorMessageBox.classList.remove('opacity-100');
+                setTimeout(() => errorMessageBox.classList.add('hidden'), 300);
+            }, 4000);
+        }
+
+        // 格式化预算数字为可读的字符串
+        function formatBudget(amount) {
+            if (typeof amount !== 'number' || amount <= 0) return 'N/A';
+            if (amount >= 1000000000) {
+                return `$${(amount / 1000000000).toFixed(2)} B`;
+            }
+            if (amount >= 1000000) {
+                return `$${(amount / 1000000).toFixed(1)} M`;
+            }
+            return `$${amount.toLocaleString()}`;
+        }
+        
+        // --- API 调用逻辑 (GET /movies) ---
+
+        async function fetchMovies(cursor = null) {
+            const params = new URLSearchParams();
+            const q = document.getElementById('search-query').value.trim();
+            if (q) params.append('q', q);
+            const year = document.getElementById('search-year').value.trim();
+            if (year) params.append('year', year);
+            const genre = document.getElementById('search-genre').value;
+            if (genre) params.append('genre', genre);
+            
+            params.append('limit', PAGE_SIZE);
+
+            if (cursor) {
+                params.append('cursor', cursor);
+            }
+            
+            const url = `${API_BASE_URL}${API_MOVIES_ENDPOINT}?${params.toString()}`;
+            console.log('Fetching URL:', url); 
+
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    let errorData = await response.json().catch(() => ({ message: `请求失败，HTTP 状态码: ${response.status}` }));
+                    throw new Error(errorData.message || '未知错误');
+                }
+                
+                const data = await response.json(); 
+                return data;
+
+            } catch (error) {
+                console.error('API Error:', error);
+                // 重点：当遇到网络错误（如 Failed to fetch）时，给出明确的 CORS/服务器检查提示
+                showCustomAlert(`搜索 API 请求失败。错误信息: ${error.message}。请检查后端服务 (http://localhost:8080) 是否运行正常，以及是否配置了 CORS 跨域访问策略。`);
+                return { items: [], nextCursor: null, error: error.message }; 
+            }
+        }
+
+        // 新增 API 调用: GET /movies/{title}/rating (聚合评分)
+        async function fetchRatingAggregate(movieTitle) {
+            const url = `${API_BASE_URL}${API_MOVIES_ENDPOINT}/${encodeURIComponent(movieTitle)}/rating`;
+            
+            try {
+                const response = await fetch(url);
+                if (response.status === 404) {
+                    // 电影存在但没有评分
+                    return { average: 0.0, count: 0 };
+                }
+                if (!response.ok) {
+                    throw new Error(`请求失败，状态码: ${response.status}`);
+                }
+                
+                return await response.json(); // { average: 4.3, count: 128 }
+            } catch (error) {
+                console.warn(`无法获取 ${movieTitle} 的评分: ${error.message}`);
+                // 返回默认值，不中断渲染
+                return { average: null, count: null };
+            }
+        }
+        
+        // API 调用: POST /movies/{title}/ratings (提交评分)
+        async function submitRatingAPI(movieId, movieTitle, ratingValue, raterId) {
+            const url = `${API_BASE_URL}${API_MOVIES_ENDPOINT}/${encodeURIComponent(movieTitle)}/ratings`;
+            const ratingPayload = { rating: ratingValue };
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Rater-Id': raterId
+                    },
+                    body: JSON.stringify(ratingPayload)
+                });
+
+                let data = await response.json().catch(() => ({}));
+
+                if (response.ok) {
+                    const statusText = response.status === 201 ? '创建成功' : '更新成功';
+                    // 修复：使用 selectedRating，以防 data.rating 缺失（虽然根据 API 文档不应发生）
+                    const actualRating = data.rating || ratingValue;
+                    showCustomSuccess(`评分提交成功 (${statusText})! ${movieTitle} 评分: ${actualRating}`);
+                    // 评分成功后，刷新该电影卡片的聚合评分
+                    refreshMovieRating(movieId, movieTitle);
+                } else {
+                    const errorMessage = data.message || `请求失败，HTTP 状态码: ${response.status}`;
+                    showCustomAlert(`评分提交失败: ${errorMessage}`);
+                }
+
+            } catch (error) {
+                console.error('Network Error during rating submission:', error);
+                // 重点：当遇到网络错误（如 Failed to fetch）时，给出明确的 CORS/服务器检查提示
+                showCustomAlert(`评分 API 请求失败。错误信息: ${error.message}。这通常是由于网络连接失败或后端 CORS 配置错误导致的。`);
+            }
+        }
+
+        // API 调用: POST /movies (添加电影)
+        async function addMovieAPI(movieData) {
+            const url = `${API_BASE_URL}${API_MOVIES_ENDPOINT}`;
+            
+            // 确保 adminToken 存在
+            if (!adminToken) {
+                 showCustomAlert('管理员 Token 缺失。请重新登录。');
+                 return;
+            }
+
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${adminToken}` // 使用管理员 token
+                    },
+                    body: JSON.stringify(movieData)
+                });
+
+                let data = await response.json().catch(() => ({}));
+                
+                if (response.status === 201) {
+                    showCustomSuccess(`电影添加成功! ID: ${data.id || '未知'}`);
+                    performSearch(); // 刷新列表
+                } else {
+                    const errorMessage = data.message || `添加电影失败，状态码: ${response.status}`;
+                    showCustomAlert(`添加电影失败: ${errorMessage}`);
+                }
+            } catch (error) {
+                console.error('Network Error during movie creation:', error);
+                // 重点：当遇到网络错误（如 Failed to fetch）时，给出明确的 CORS/服务器检查提示
+                showCustomAlert(`添加电影 API 请求失败。错误信息: ${error.message}。请确认后端服务运行正常并已允许跨域访问 (CORS)。`);
+            } finally {
+                closeAddMovieModal();
+            }
+        }
+
+        // --- 渲染与控制逻辑 ---
+
+        // 渲染单个电影卡片
+        function renderMovieCard(movie) {
+            const budget = formatBudget(movie.budget);
+            const mpaRating = movie.mpaRating || 'N/A';
+            const releaseYear = movie.releaseDate ? new Date(movie.releaseDate).getFullYear() : 'N/A';
+            
+            // 重点修复：
+            // 1. 使用 movie.id 作为 DOM 元素的唯一标识符，避免标题中的特殊字符导致 ID 失效。
+            // 2. 通过 data-* 属性传参，避免 onclick 中的引号冲突。
+            // 3. 对标题使用 encodeURIComponent 编码，在点击时再解码。
+            const encodedTitle = encodeURIComponent(movie.title || '无标题');
+
+            return `
+                <div id="movie-card-${movie.id}" class="movie-card bg-gray-800 rounded-xl overflow-hidden shadow-lg border border-gray-700 transition duration-300">
+                    <div class="p-6">
+                        <div class="flex items-start justify-between">
+                            <h3 class="text-xl font-bold text-indigo-400 leading-tight">
+                                ${movie.title || '无标题'}
+                            </h3>
+                            <span class="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-600 text-white ml-2">
+                                ${mpaRating}
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-500 mb-4">ID: ${movie.id} / ${releaseYear}</p>
+                        
+                        <!-- 聚合评分显示区域 (使用 movie.id) -->
+                        <div id="rating-info-${movie.id}" class="flex items-center space-x-2 mb-4">
+                            <svg class="animate-pulse h-5 w-5 text-yellow-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                            <span class="text-sm text-gray-400">加载评分...</span>
+                        </div>
+
+                        <!-- 评分按钮：使用 data-* 传参，避免引号冲突 -->
+                        <button
+                            data-id="${movie.id}"
+                            data-title="${encodedTitle}"
+                            onclick="showRatingModal(this.dataset.id, decodeURIComponent(this.dataset.title))"
+                            class="mt-2 w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded-lg transition duration-150 shadow-md shadow-blue-500/30">
+                            我要评分
+                        </button>
+                        
+                        <!-- 详情标签 -->
+                        <div class="space-y-2 text-sm mt-4 pt-4 border-t border-gray-700">
+                            <p class="text-gray-400">
+                                <span class="font-semibold text-gray-200">类型:</span> 
+                                <span class="bg-gray-700 text-indigo-300 px-2 py-0.5 rounded-full">${movie.genre || 'N/A'}</span>
+                            </p>
+                            <p class="text-gray-400">
+                                <span class="font-semibold text-gray-200">预算:</span> 
+                                <span class="font-mono text-green-400">${budget}</span>
+                            </p>
+                            <p class="text-gray-400">
+                                <span class="font-semibold text-gray-200">发行商:</span> 
+                                <span class="text-gray-300">${movie.distributor || 'N/A'}</span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 更新电影卡片上的聚合评分显示
+        function updateRatingDisplay(movieId, average, count) {
+            const displayEl = document.getElementById(`rating-info-${movieId}`);
+            if (!displayEl) return;
+            
+            if (average !== null && count !== null && count > 0) {
+                const formattedAverage = average.toFixed(1);
+                displayEl.innerHTML = `
+                    <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                    <span class="text-lg font-bold text-yellow-400">${formattedAverage}</span>
+                    <span class="text-sm text-gray-400">(${count.toLocaleString()} 评分)</span>
+                `;
+            } else {
+                 displayEl.innerHTML = `
+                    <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.381-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                    <span class="text-sm text-gray-500">暂无评分</span>
+                `;
+            }
+        }
+        
+        // 刷新单部电影的评分
+        async function refreshMovieRating(movieId, movieTitle) {
+             const result = await fetchRatingAggregate(movieTitle);
+             updateRatingDisplay(movieId, result.average, result.count);
+        }
+
+        // 渲染电影列表并触发评分聚合调用
+        function renderList(movies) {
+            movieListContainer.innerHTML = '';
+            if (movies.length === 0) {
+                noResultsElement.classList.remove('hidden');
+            } else {
+                noResultsElement.classList.add('hidden');
+                movies.forEach(movie => {
+                    movieListContainer.innerHTML += renderMovieCard(movie);
+                });
+            }
+            movieCountElement.textContent = `(${movies.length} 部)`;
+
+            // 级联调用：并行获取每部电影的聚合评分
+            const ratingPromises = movies.map(movie => fetchRatingAggregate(movie.title));
+            Promise.allSettled(ratingPromises).then(results => {
+                results.forEach((result, index) => {
+                    const movie = movies[index];
+                    if (result.status === 'fulfilled' && result.value) {
+                        updateRatingDisplay(movie.id, result.value.average, result.value.count);
+                    } else {
+                         updateRatingDisplay(movie.id, null, null);
+                    }
+                });
+            });
+        }
+        
+        function updatePaginationButtons(nextCursor) {
+            // API 文档只提供了 nextCursor，因此我们禁用 "上一页" 按钮。
+            document.getElementById('prev-page').disabled = true; 
+            nextButton.disabled = !nextCursor;
+        }
+
+        // 执行新的搜索
+        async function performSearch() {
+            currentCursor = null; 
+            loadingIndicator.classList.remove('hidden');
+            searchButton.textContent = '搜索中...';
+            searchButton.disabled = true;
+            movieListContainer.innerHTML = '';
+            
+            const response = await fetchMovies(currentCursor);
+            
+            if (response.items) {
+                renderList(response.items);
+                currentCursor = response.nextCursor || null;
+                updatePaginationButtons(currentCursor);
+            } else {
+                 renderList([]); 
+                 updatePaginationButtons(null);
+            }
+            
+            loadingIndicator.classList.add('hidden');
+            searchButton.textContent = '搜索电影';
+            searchButton.disabled = false;
+        }
+        
+        // 分页跳转到下一页
+        async function goToNextPage() {
+            if (!currentCursor) return;
+            
+            loadingIndicator.classList.remove('hidden');
+            nextButton.disabled = true;
+            movieListContainer.innerHTML = '';
+            
+            const response = await fetchMovies(currentCursor);
+            
+            if (response.items) {
+                renderList(response.items); 
+                currentCursor = response.nextCursor || null;
+                updatePaginationButtons(currentCursor);
+            } else {
+                updatePaginationButtons(null);
+            }
+            
+            loadingIndicator.classList.add('hidden');
+        }
+
+        // --- 模态框与评分逻辑 ---
+
+        // 渲染星级评分控件
+        function renderStarRating() {
+            const area = document.getElementById('star-rating-area');
+            area.innerHTML = '';
+            // 5 颗星，每颗星对应 0.5 增量，共 10 个 radio
+            for (let i = 10; i >= 1; i--) {
+                const value = i / 2;
+                const input = document.createElement('input');
+                input.type = 'radio';
+                input.id = `star-${value}`;
+                input.name = 'rating';
+                input.value = value;
+                input.addEventListener('change', () => {
+                    selectedRating = value;
+                    document.getElementById('current-rating-value').textContent = `${value.toFixed(1)} / 5.0`;
+                });
+
+                const label = document.createElement('label');
+                label.htmlFor = `star-${value}`;
+                label.title = `${value.toFixed(1)} 星`;
+                
+                area.appendChild(input);
+                area.appendChild(label);
+            }
+        }
+        
+        // 显示评分模态框
+        function showRatingModal(movieId, movieTitle) {
+            currentMovieId = movieId;
+            currentMovieTitle = movieTitle;
+            selectedRating = 0.0; // 重置评分
+            
+            document.getElementById('modal-movie-title').textContent = movieTitle;
+            document.getElementById('rating-modal').classList.remove('hidden');
+            document.body.classList.add('overflow-hidden'); // 防止背景滚动
+            
+            renderStarRating(); // 渲染星级控件
+            document.getElementById('current-rating-value').textContent = '0.0 / 5.0';
+
+            // 检查 Rater ID 是否存在
+            raterId = localStorage.getItem('raterId');
+            const raterIdPrompt = document.getElementById('rater-id-prompt');
+            if (!raterId) {
+                raterIdPrompt.classList.remove('hidden');
+                document.getElementById('modal-rater-id').value = '';
+            } else {
+                raterIdPrompt.classList.add('hidden');
+            }
+        }
+
+        // 关闭评分模态框（不清空当前电影ID和标题，以便提交后仍可使用）
+        function closeRatingModal() {
+            document.getElementById('rating-modal').classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        // 处理评分提交
+        function handleRatingSubmission() {
+            let finalRaterId = localStorage.getItem('raterId');
+            
+            // 1. 如果 Rater ID 未设置，尝试从模态框获取并保存
+            if (!finalRaterId) {
+                const inputId = document.getElementById('modal-rater-id').value.trim();
+                if (!inputId) {
+                    showCustomAlert('请先输入您的 Rater ID。');
+                    return;
+                }
+                localStorage.setItem('raterId', inputId);
+                finalRaterId = inputId;
+            }
+
+            // 2. 检查评分是否选择
+            if (selectedRating === 0.0) {
+                showCustomAlert('请点击星星选择您的评分。');
+                return;
+            }
+
+            // 3. 提交评分（防护：确保标题存在）
+            if (!currentMovieTitle) {
+                const fallbackTitle = document.getElementById('modal-movie-title')?.textContent?.trim();
+                if (fallbackTitle) {
+                    currentMovieTitle = fallbackTitle;
+                } else {
+                    showCustomAlert('系统未获取到影片标题，请重试打开评分弹窗。');
+                    return;
+                }
+            }
+            closeRatingModal();
+            submitRatingAPI(currentMovieId, currentMovieTitle, selectedRating, finalRaterId);
+        }
+
+        // --- 管理员逻辑 ---
+        
+        // 更新管理员按钮状态
+        function updateAdminStatus() {
+            const adminStatusText = document.getElementById('admin-status-text');
+            if (localStorage.getItem('adminToken')) {
+                adminStatusText.textContent = '管理员 (已登录)';
+                adminStatusText.classList.add('text-yellow-300');
+            } else {
+                adminStatusText.textContent = '管理员入口';
+                adminStatusText.classList.remove('text-yellow-300');
+            }
+        }
+
+        // 显示管理员登录模态框
+        function showAdminLoginModal() {
+            document.getElementById('admin-login-modal').classList.remove('hidden');
+            document.body.classList.add('overflow-hidden');
+
+            const loginArea = document.getElementById('admin-login-area');
+            const logoutArea = document.getElementById('admin-logout-area');
+
+            if (localStorage.getItem('adminToken')) {
+                loginArea.classList.add('hidden');
+                logoutArea.classList.remove('hidden');
+            } else {
+                loginArea.classList.remove('hidden');
+                logoutArea.classList.add('hidden');
+            }
+        }
+
+        // 关闭管理员登录模态框
+        function closeAdminLoginModal() {
+            document.getElementById('admin-login-modal').classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+
+        // 管理员登录
+        function adminLogin() {
+            const key = document.getElementById('admin-key-input').value.trim();
+            if (key) {
+                // 假设私钥即为 JWT/Token，直接存储
+                adminToken = key;
+                localStorage.setItem('adminToken', adminToken);
+                showCustomSuccess('管理员登录成功！');
+                updateAdminStatus();
+                closeAdminLoginModal();
+            } else {
+                showCustomAlert('私钥不能为空！');
+            }
+        }
+
+        // 退出管理员
+        function adminLogout() {
+            adminToken = '';
+            localStorage.removeItem('adminToken');
+            showCustomSuccess('已退出管理员身份。');
+            updateAdminStatus();
+            closeAdminLoginModal();
+        }
+
+        // 显示添加电影模态框
+        function showAddMovieModal() {
+            if (!adminToken) {
+                showCustomAlert('请先登录管理员身份。');
+                closeAdminLoginModal();
+                return;
+            }
+            document.getElementById('add-movie-modal').classList.remove('hidden');
+            closeAdminLoginModal(); // 关闭登录模态框
+        }
+
+        // 关闭添加电影模态框
+        function closeAddMovieModal() {
+            document.getElementById('add-movie-modal').classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+            document.getElementById('add-movie-form').reset(); // 重置表单
+        }
+
+        // 提交添加电影表单
+        function addMovie() {
+            const form = document.getElementById('add-movie-form');
+            if (!form.checkValidity()) {
+                 showCustomAlert('请填写所有必填字段 (*)。');
+                 return;
+            }
+            
+            const movieData = {
+                title: document.getElementById('movie-title').value,
+                genre: document.getElementById('movie-genre').value,
+                releaseDate: document.getElementById('movie-releaseDate').value,
+            };
+
+            // 添加可选字段
+            const distributor = document.getElementById('movie-distributor').value;
+            if (distributor) movieData.distributor = distributor;
+            const budget = parseInt(document.getElementById('movie-budget').value);
+            if (!isNaN(budget) && budget > 0) movieData.budget = budget;
+            const mpaRating = document.getElementById('movie-mpaRating').value;
+            if (mpaRating) movieData.mpaRating = mpaRating;
+
+            addMovieAPI(movieData);
+        }
+
+        // 初始化加载
+        window.onload = () => {
+            updateAdminStatus(); // 检查是否有已存储的管理员 Token
+            performSearch();
+        };
+    </script>
+</body>
+</html>
