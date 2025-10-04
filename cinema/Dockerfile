@@ -16,6 +16,7 @@ WORKDIR /app
 COPY --from=builder /app/app .
 COPY db/migrations ./db/migrations
 COPY .env.example .
+COPY openapi.yml .
 
 EXPOSE 8080
 

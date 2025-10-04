@@ -14,6 +14,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+	"sigs.k8s.io/yaml"
 )
 
 func main() {
@@ -72,6 +75,31 @@ func main() {
 	router.GET("/healthz", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+
+	router.GET("/swagger.json", func(c *gin.Context) {
+		specPath := os.Getenv("OPENAPI_SPEC_PATH")
+		if specPath == "" {
+			specPath = "openapi.yml"
+		}
+
+		data, err := os.ReadFile(specPath)
+		if err != nil {
+			log.Printf("failed to read OpenAPI spec %s: %v", specPath, err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "unable to load OpenAPI spec"})
+			return
+		}
+
+		jsonData, err := yaml.YAMLToJSON(data)
+		if err != nil {
+			log.Printf("failed to convert OpenAPI spec to JSON: %v", err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"code": "INTERNAL_ERROR", "message": "unable to parse OpenAPI spec"})
+			return
+		}
+
+		c.Data(http.StatusOK, "application/json", jsonData)
+	})
+
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler, ginSwagger.URL("/swagger.json")))
 
 	authMiddleware := middleware.RequireBearerToken(authToken)
 
