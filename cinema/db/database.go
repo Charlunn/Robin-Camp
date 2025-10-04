@@ -1,34 +1,48 @@
 package db
 
 import (
-	"database/sql"
-	"log"
+    "database/sql"
+    "fmt"
+    "log"
+    "time"
 
-	_ "github.com/go-sql-driver/mysql" // 数据库驱动的导入现在也移到了这里！
+    _ "github.com/jackc/pgx/v5/stdlib"
 )
 
-// NewConnection 创建并返回一个新的数据库连接池。
-// 这是数据库初始化的唯一入口点。
-func NewConnection() (*sql.DB, error) {
-	// 在真实的应用中，DSN 字符串应该来自配置文件或环境变量，而不是硬编码。
-	dsn := "go_user:your_strong_password@tcp(127.0.0.1:3306)/go_tutorial_db?parseTime=true"
+func NewConnection(dsn string) (*sql.DB, error) {
+    if dsn == "" {
+        return nil, fmt.Errorf("database connection string is required")
+    }
 
-	// `sql.Open` 只是验证参数，不会建立连接。
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		// 如果 DSN 格式错误，这里会立即失败。
-		return nil, err
-	}
+    const (
+        maxRetries    = 10
+        retryInterval = 3 * time.Second
+    )
 
-	// `db.Ping()` 尝试建立一个连接，以验证数据库是否可达。
-	if err := db.Ping(); err != nil {
-		// 如果数据库连不上（密码错误、地址错误等），这里会失败。
-		db.Close() // 如果 ping 失败，最好关闭句柄以释放资源
-		return nil, err
-	}
+    var (
+        db  *sql.DB
+        err error
+    )
 
-	log.Println("Successfully connected to the database!")
+    for attempt := 1; attempt <= maxRetries; attempt++ {
+        db, err = sql.Open("pgx", dsn)
+        if err != nil {
+            return nil, fmt.Errorf("open database failed: %w", err)
+        }
 
-	// 返回创建好的数据库连接池
-	return db, nil
+        db.SetMaxOpenConns(10)
+        db.SetMaxIdleConns(5)
+        db.SetConnMaxLifetime(30 * time.Minute)
+
+        if err = db.Ping(); err == nil {
+            log.Println("database connection established")
+            return db, nil
+        }
+
+        log.Printf("database connection failed (%d/%d): %v, retrying in %s", attempt, maxRetries, err, retryInterval)
+        db.Close()
+        time.Sleep(retryInterval)
+    }
+
+    return nil, fmt.Errorf("database connection failed after retries: %w", err)
 }

@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: cinema-db
+    environment:
+      POSTGRES_DB: cinema
+      POSTGRES_USER: cinema
+      POSTGRES_PASSWORD: cinema
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cinema -d cinema"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      - cinema-db-data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    networks:
+      - cinema-net
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cinema-app
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      PORT: ${PORT:-8080}
+      AUTH_TOKEN: ${AUTH_TOKEN}
+      DB_URL: ${DB_URL:-postgres://cinema:cinema@db:5432/cinema?sslmode=disable}
+      BOXOFFICE_URL: ${BOXOFFICE_URL}
+      BOXOFFICE_API_KEY: ${BOXOFFICE_API_KEY}
+    ports:
+      - "${PORT:-8080}:8080"
+    networks:
+      - cinema-net
+
+volumes:
+  cinema-db-data:
+
+networks:
+  cinema-net:
+    driver: bridge
