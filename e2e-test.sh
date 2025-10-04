@@ -446,42 +446,42 @@ stage6_error_handling() {
         log_error "Should return 404 for rating submission to non-existent movie"
     fi
     
-    # Test invalid rating values (should return 422)
-    log_info "Testing invalid rating value (expecting 422)..."
-    if make_request "POST" "/movies/Test Movie 1/ratings" "-H 'X-Rater-Id: user999'" '{"rating":6.0}' 422 >/dev/null; then
-        log_success "Correctly returned 422 for invalid rating value"
+    # Test invalid rating values (should return 400)
+    log_info "Testing invalid rating value (expecting 400)..."
+    if make_request "POST" "/movies/Test Movie 1/ratings" "-H 'X-Rater-Id: user999'" '{"rating":6.0}' 400 >/dev/null; then
+        log_success "Correctly returned 400 for invalid rating value"
     else
-        log_error "Should return 422 for invalid rating value"
+        log_error "Should return 400 for invalid rating value"
     fi
-    
-    if make_request "POST" "/movies/Test Movie 1/ratings" "-H 'X-Rater-Id: user999'" '{"rating":0.25}' 422 >/dev/null; then
-        log_success "Correctly returned 422 for invalid rating step"
+
+    if make_request "POST" "/movies/Test Movie 1/ratings" "-H 'X-Rater-Id: user999'" '{"rating":0.25}' 400 >/dev/null; then
+        log_success "Correctly returned 400 for invalid rating step"
     else
-        log_error "Should return 422 for invalid rating step"
+        log_error "Should return 400 for invalid rating step"
     fi
-    
-    # Test missing required fields in movie creation (should return 422)
-    log_info "Testing movie creation with missing title (expecting 422)..."
-    if make_request "POST" "/movies" "-H 'Authorization: Bearer $AUTH_TOKEN'" '{"releaseDate":"2023-01-01"}' 422 >/dev/null; then
-        log_success "Correctly returned 422 for missing title"
+
+    # Test missing required fields in movie creation (should return 400)
+    log_info "Testing movie creation with missing title (expecting 400)..."
+    if make_request "POST" "/movies" "-H 'Authorization: Bearer $AUTH_TOKEN'" '{"releaseDate":"2023-01-01"}' 400 >/dev/null; then
+        log_success "Correctly returned 400 for missing title"
     else
-        log_error "Should return 422 for missing title"
+        log_error "Should return 400 for missing title"
     fi
-    
-    # Test invalid date format (should return 422)
-    log_info "Testing movie creation with invalid date format (expecting 422)..."
-    if make_request "POST" "/movies" "-H 'Authorization: Bearer $AUTH_TOKEN'" '{"title":"Test Invalid Date","releaseDate":"invalid-date"}' 422 >/dev/null; then
-        log_success "Correctly returned 422 for invalid date format"
+
+    # Test invalid date format (should return 400)
+    log_info "Testing movie creation with invalid date format (expecting 400)..."
+    if make_request "POST" "/movies" "-H 'Authorization: Bearer $AUTH_TOKEN'" '{"title":"Test Invalid Date","releaseDate":"invalid-date"}' 400 >/dev/null; then
+        log_success "Correctly returned 400 for invalid date format"
     else
-        log_error "Should return 422 for invalid date format"
+        log_error "Should return 400 for invalid date format"
     fi
-    
-    # Test invalid JSON (should return 422)
-    log_info "Testing invalid JSON in request body (expecting 422)..."
-    if make_request "POST" "/movies" "-H 'Authorization: Bearer $AUTH_TOKEN'" 'invalid json' 422 >/dev/null; then
-        log_success "Correctly returned 422 for invalid JSON"
+
+    # Test invalid JSON (should return 400)
+    log_info "Testing invalid JSON in request body (expecting 400)..."
+    if make_request "POST" "/movies" "-H 'Authorization: Bearer $AUTH_TOKEN'" 'invalid json' 400 >/dev/null; then
+        log_success "Correctly returned 400 for invalid JSON"
     else
-        log_error "Should return 422 for invalid JSON"
+        log_error "Should return 400 for invalid JSON"
     fi
 }
 

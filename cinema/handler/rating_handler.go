@@ -52,7 +52,7 @@ func (h *RatingHandler) UpsertRating(c *gin.Context) {
 
 	var req upsertRatingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "Malformed JSON payload", nil)
+		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Malformed JSON payload", nil)
 		return
 	}
 
@@ -71,7 +71,7 @@ func (h *RatingHandler) UpsertRating(c *gin.Context) {
 			Rating:     rating.Value,
 		})
 	case errors.Is(err, service.ErrValidation):
-		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "rating must be between 0.5 and 5.0 in 0.5 steps", nil)
+		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "rating must be between 0.5 and 5.0 in 0.5 steps", nil)
 	case errors.Is(err, repository.ErrMovieNotFound):
 		writeError(c, http.StatusNotFound, "NOT_FOUND", "Movie not found", nil)
 	default:

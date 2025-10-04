@@ -62,12 +62,12 @@ func NewMovieHandler(service *service.MovieService) *MovieHandler {
 func (h *MovieHandler) CreateMovie(c *gin.Context) {
 	var req createMovieRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "Malformed JSON payload", nil)
+		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Malformed JSON payload", nil)
 		return
 	}
 
 	if strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Genre) == "" || strings.TrimSpace(req.ReleaseDate) == "" {
-		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "title, genre and releaseDate are required", nil)
+		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "title, genre and releaseDate are required", nil)
 		return
 	}
 
@@ -87,9 +87,9 @@ func (h *MovieHandler) CreateMovie(c *gin.Context) {
 		c.Header("Location", location)
 		c.JSON(http.StatusCreated, toMovieResponse(movie))
 	case errors.Is(err, service.ErrInvalidInput):
-		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "Invalid request payload", nil)
+		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Invalid request payload", nil)
 	case errors.Is(err, repository.ErrMovieAlreadyExists):
-		writeError(c, http.StatusConflict, "CONFLICT", "Movie with the same title already exists", nil)
+		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Movie with the same title already exists", nil)
 	default:
 		writeError(c, http.StatusInternalServerError, "INTERNAL_ERROR", "Failed to create movie", nil)
 	}
