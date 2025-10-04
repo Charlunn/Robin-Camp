@@ -69,12 +69,12 @@ func (h *MovieHandler) CreateMovie(c *gin.Context) {
 			return
 		}
 		log.Printf("CreateMovie bind error: %v", err)
-		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Malformed JSON payload", nil)
+		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "Malformed JSON payload", nil)
 		return
 	}
 
 	if strings.TrimSpace(req.Title) == "" || strings.TrimSpace(req.Genre) == "" || strings.TrimSpace(req.ReleaseDate) == "" {
-		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "title, genre and releaseDate are required", nil)
+		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "title, genre and releaseDate are required", nil)
 		return
 	}
 
@@ -94,7 +94,7 @@ func (h *MovieHandler) CreateMovie(c *gin.Context) {
 		c.Header("Location", location)
 		c.JSON(http.StatusCreated, toMovieResponse(movie))
 	case errors.Is(err, service.ErrInvalidInput):
-		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Invalid request payload", nil)
+		writeError(c, http.StatusUnprocessableEntity, "UNPROCESSABLE_ENTITY", "Invalid request payload", nil)
 	case errors.Is(err, repository.ErrMovieAlreadyExists):
 		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Movie with the same title already exists", nil)
 	default:
