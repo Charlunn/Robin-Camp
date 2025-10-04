@@ -84,6 +84,23 @@ jobs:
         shell: bash
         run: docker compose --project-name cinema-ci up -d --no-build
 
+      - name: Check frontend homepage is served by nginx
+        working-directory: cinema
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Retry for up to ~30s until nginx is healthy and serving index.html
+          for i in {1..10}; do
+            if curl -sS http://localhost:80/ | grep -q '电影探索者'; then
+              echo "Frontend is up."
+              exit 0
+            fi
+            echo "Waiting for frontend (attempt $i)..."
+            sleep 3
+          done
+          echo "Frontend check failed: index.html not served on http://localhost:80/"
+          exit 1
+
       - name: Run E2E tests
         working-directory: cinema
         shell: bash

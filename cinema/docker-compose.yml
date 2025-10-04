@@ -2,14 +2,12 @@ services:
   db:
     image: postgres:16-alpine
     container_name: cinema-db
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-cinema}
-      POSTGRES_USER: ${POSTGRES_USER:-cinema}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cinema}
+    env_file:
+      - .env
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cinema} -d ${POSTGRES_DB:-cinema}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -21,7 +19,7 @@ services:
       - cinema-net
 
   app:
-    image: ${APP_IMAGE:-cinema-app}
+    image: ${APP_IMAGE}
     build:
       context: .
       dockerfile: Dockerfile
@@ -31,14 +29,34 @@ services:
         condition: service_healthy
     env_file:
       - .env
-    environment:
-      PORT: ${PORT:-8080}
-      AUTH_TOKEN: ${AUTH_TOKEN}
-      DB_URL: ${DB_URL:-postgres://${POSTGRES_USER:-cinema}:${POSTGRES_PASSWORD:-cinema}@db:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-cinema}?sslmode=disable}
-      BOXOFFICE_URL: ${BOXOFFICE_URL}
-      BOXOFFICE_API_KEY: ${BOXOFFICE_API_KEY}
     ports:
-      - "${PORT:-8080}:8080"
+      - "${PORT}:8080"
+    networks:
+      - cinema-net
+
+  nginx:
+    image: nginx:alpine
+    container_name: cinema-nginx
+    depends_on:
+      app:
+        condition: service_started
+    env_file:
+      - .env
+    command: >
+      sh -c "
+      echo \"window.APP_CONFIG={API_BASE_URL:'${FRONTEND_API_BASE_URL}'}\" >/usr/share/nginx/html/config.js;
+      exec nginx -g 'daemon off;'
+      "
+    ports:
+      - "80:80"
+    volumes:
+      - ./index.html:/usr/share/nginx/html/index.html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
     networks:
       - cinema-net
 
