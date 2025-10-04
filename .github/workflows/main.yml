@@ -1,0 +1,47 @@
+name: E2E Tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run unit tests
+        run: go test ./...
+        working-directory: cinema
+
+      - name: Build and start services
+        run: docker compose up -d --build
+        working-directory: cinema
+
+      - name: Run E2E tests
+        run: |
+          chmod +x e2e-test.sh
+          AUTH_TOKEN=local-token \
+          BOXOFFICE_URL=https://mock.apifox.com/m1/4288164-0-default \
+          BOXOFFICE_API_KEY=mock-key \
+          ./e2e-test.sh
+        working-directory: cinema
+
+      - name: Show service logs on failure
+        if: failure()
+        run: docker compose logs
+        working-directory: cinema
+
+      - name: Stop services
+        if: always()
+        run: docker compose down
+        working-directory: cinema
