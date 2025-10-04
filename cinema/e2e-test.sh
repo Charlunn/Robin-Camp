@@ -8,6 +8,10 @@
 # Load environment variables from .env file if it exists
 if [[ -f .env ]]; then
     export $(grep -v '^#' .env | xargs)
+    AUTH_TOKEN=${AUTH_TOKEN//$'\r'/}
+    BOXOFFICE_URL=${BOXOFFICE_URL//$'\r'/}
+    BOXOFFICE_API_KEY=${BOXOFFICE_API_KEY//$'\r'/}
+    BASE_URL=${BASE_URL//$'\r'/}
 fi
 
 # Colors for output

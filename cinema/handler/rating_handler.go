@@ -5,6 +5,7 @@ import (
 	"cinema/service"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -51,7 +52,12 @@ func (h *RatingHandler) UpsertRating(c *gin.Context) {
 	}
 
 	var req upsertRatingRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := bindJSONBody(c.Request.Body, &req); err != nil {
+		if errors.Is(err, errJSONBodyTooLarge) {
+			writeError(c, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Request body exceeds the maximum allowed size", nil)
+			return
+		}
+		log.Printf("UpsertRating bind error: %v", err)
 		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Malformed JSON payload", nil)
 		return
 	}

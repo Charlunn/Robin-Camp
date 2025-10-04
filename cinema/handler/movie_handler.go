@@ -5,6 +5,7 @@ import (
 	"cinema/repository"
 	"cinema/service"
 	"errors"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -35,7 +36,7 @@ type movieResponse struct {
 	Distributor *string            `json:"distributor,omitempty"`
 	Budget      *int64             `json:"budget,omitempty"`
 	MpaRating   *string            `json:"mpaRating,omitempty"`
-	BoxOffice   *boxOfficeResponse `json:"boxOffice,omitempty"`
+	BoxOffice   *boxOfficeResponse `json:"boxOffice"`
 }
 
 type boxOfficeResponse struct {
@@ -61,7 +62,13 @@ func NewMovieHandler(service *service.MovieService) *MovieHandler {
 
 func (h *MovieHandler) CreateMovie(c *gin.Context) {
 	var req createMovieRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+
+	if err := bindJSONBody(c.Request.Body, &req); err != nil {
+		if errors.Is(err, errJSONBodyTooLarge) {
+			writeError(c, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "Request body exceeds the maximum allowed size", nil)
+			return
+		}
+		log.Printf("CreateMovie bind error: %v", err)
 		writeError(c, http.StatusBadRequest, "BAD_REQUEST", "Malformed JSON payload", nil)
 		return
 	}
