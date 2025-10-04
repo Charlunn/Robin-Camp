@@ -1,14 +1,17 @@
-name: E2E Tests
+name: CI
 
 on:
   push:
   pull_request:
 
-jobs:
-  e2e:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+env:
+  IMAGE_NAME: cinema-app
 
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_TAG: ${{ github.sha }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -19,29 +22,82 @@ jobs:
           go-version: '1.23'
           cache: true
 
+      - name: Go vet
+        run: go vet ./...
+        working-directory: cinema
+
       - name: Run unit tests
         run: go test ./...
         working-directory: cinema
 
-      - name: Build and start services
-        run: docker compose up -d --build
+      - name: Build Docker image
+        run: docker build -t "$IMAGE_NAME:$IMAGE_TAG" -f cinema/Dockerfile cinema
+
+      - name: Save Docker image artifact
+        shell: bash
+        run: |
+          docker save "$IMAGE_NAME:$IMAGE_TAG" | gzip > image.tar.gz
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cinema-image
+          path: image.tar.gz
+          retention-days: 1
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download image artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cinema-image
+          path: artifacts
+
+      - name: Load Docker image
+        shell: bash
+        run: |
+          gunzip -c artifacts/image.tar.gz | docker load
+          echo "APP_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq postgresql-client
+
+      - name: Prepare environment files
         working-directory: cinema
+        shell: bash
+        run: |
+          sed -i 's/\r$//' .env
+          chmod +x e2e-test.sh
+
+      - name: Start application stack
+        working-directory: cinema
+        shell: bash
+        run: docker compose --project-name cinema-ci up -d --no-build
 
       - name: Run E2E tests
-        run: |
-          chmod +x e2e-test.sh
-          AUTH_TOKEN=local-token \
-          BOXOFFICE_URL=https://mock.apifox.com/m1/4288164-0-default \
-          BOXOFFICE_API_KEY=mock-key \
-          ./e2e-test.sh
         working-directory: cinema
+        shell: bash
+        run: ./e2e-test.sh
 
-      - name: Show service logs on failure
+      - name: Show logs on failure
         if: failure()
-        run: docker compose logs
         working-directory: cinema
+        shell: bash
+        run: docker compose --project-name cinema-ci logs
 
-      - name: Stop services
+      - name: Tear down stack
         if: always()
-        run: docker compose down
         working-directory: cinema
+        shell: bash
+        run: docker compose --project-name cinema-ci down -v
+

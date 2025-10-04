@@ -136,6 +136,106 @@ stage1_env_health_check() {
     fi
 }
 
+verify_database_usage() {
+    echo -e "\n${BLUE}--- Database Verification ---${NC}"
+
+    local dsn="${DB_VERIFY_DSN:-${DB_URL:-}}"
+    local postgres_user="${POSTGRES_USER:-cinema}"
+    local postgres_db="${POSTGRES_DB:-cinema}"
+    local compose_cmd=""
+
+    if [[ -z "$dsn" && -z "$postgres_user" ]]; then
+        log_error "Database configuration is missing (DB_VERIFY_DSN or POSTGRES_* variables)"
+        return 1
+    fi
+
+    if command -v psql >/dev/null 2>&1 && [[ -n "$dsn" ]]; then
+        if perform_db_checks_with_psql "$dsn"; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+
+    if command -v docker >/dev/null 2>&1; then
+        if docker compose version >/dev/null 2>&1; then
+            compose_cmd="docker compose"
+        elif command -v docker-compose >/dev/null 2>&1; then
+            compose_cmd="docker-compose"
+        fi
+    fi
+
+    if [[ -n "$compose_cmd" ]]; then
+        if perform_db_checks_in_container "$compose_cmd" "$postgres_user" "$postgres_db"; then
+            return 0
+        else
+            return 1
+        fi
+    fi
+
+    log_error "Unable to verify database state (psql or docker compose not available)"
+    return 1
+}
+
+perform_db_checks_with_psql() {
+    local dsn=$1
+
+    local table_exists
+    table_exists=$(psql "$dsn" -Atqc "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='movies'" 2>/dev/null | tr -d '[:space:]')
+    if [[ "$table_exists" != "1" ]]; then
+        log_error "movies table not found in database"
+        return 1
+    fi
+
+    local movie_count
+    movie_count=$(psql "$dsn" -Atqc "SELECT COUNT(*) FROM movies" 2>/dev/null | tr -d '[:space:]')
+    if [[ -z "$movie_count" ]]; then
+        log_error "Failed to query movies table"
+        return 1
+    fi
+
+    if [[ $movie_count -lt 2 ]]; then
+        log_error "Expected at least 2 persisted movies, got $movie_count"
+        return 1
+    fi
+
+    log_success "Database migrations executed and movies persisted ($movie_count rows)"
+    return 0
+}
+
+perform_db_checks_in_container() {
+    local compose_cmd=$1
+    local user=$2
+    local database=$3
+
+    if ! $compose_cmd ps db >/dev/null 2>&1; then
+        log_error "Database container is not running"
+        return 1
+    fi
+
+    local table_exists
+    table_exists=$($compose_cmd exec -T db psql -U "$user" -d "$database" -Atqc "SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='movies'" 2>/dev/null | tr -d '[:space:]')
+    if [[ "$table_exists" != "1" ]]; then
+        log_error "movies table not found in database (container)"
+        return 1
+    fi
+
+    local movie_count
+    movie_count=$($compose_cmd exec -T db psql -U "$user" -d "$database" -Atqc "SELECT COUNT(*) FROM movies" 2>/dev/null | tr -d '[:space:]')
+    if [[ -z "$movie_count" ]]; then
+        log_error "Failed to query movies table (container)"
+        return 1
+    fi
+
+    if [[ $movie_count -lt 2 ]]; then
+        log_error "Expected at least 2 persisted movies, got $movie_count (container)"
+        return 1
+    fi
+
+    log_success "Database migrations executed and movies persisted ($movie_count rows)"
+    return 0
+}
+
 # Stage 2: Basic CRUD Operations
 stage2_basic_crud() {
     echo -e "\n${BLUE}=== STAGE 2: Basic CRUD Operations ===${NC}"
@@ -217,6 +317,8 @@ stage2_basic_crud() {
             else
                 log_error "Movie response structure is incorrect"
             fi
+
+            verify_database_usage
         else
             log_error "Expected at least 2 movies, got $items"
         fi
