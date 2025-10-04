@@ -1,6 +1,8 @@
 module cinema
 
-go 1.25.1
+go 1.23.0
+
+toolchain go1.23.12
 
 require (
 	github.com/gin-contrib/cors v1.7.2
