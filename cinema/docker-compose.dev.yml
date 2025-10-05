@@ -1,9 +1,11 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: cinema-db
+    container_name: cinema-db-dev
     env_file:
       - .env
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
@@ -11,41 +13,38 @@ services:
       retries: 5
       start_period: 5s
     volumes:
-      - cinema-db-data:/var/lib/postgresql/data
       - ./db/migrations:/docker-entrypoint-initdb.d:ro
-    restart: unless-stopped
     networks:
-      - cinema-net
+      - cinema-dev-net
 
   app:
-    image: ${APP_IMAGE}
+    image: ${APP_IMAGE:-cinema-app:dev}
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: cinema-app
+    container_name: cinema-app-dev
     depends_on:
       db:
         condition: service_healthy
     env_file:
       - .env
     environment:
-      APP_ENV: production
+      APP_ENV: development
     ports:
-      - "${PORT:-8080}:8080"
-    restart: unless-stopped
+      - "8080:8080"
     networks:
-      - cinema-net
+      - cinema-dev-net
 
   nginx:
     image: nginx:alpine
-    container_name: cinema-nginx
+    container_name: cinema-nginx-dev
     depends_on:
       app:
         condition: service_started
     env_file:
       - .env
     environment:
-      APP_ENV: production
+      APP_ENV: development
     command: >
       sh -c "
       echo \"window.APP_CONFIG={API_BASE_URL:'${FRONTEND_API_BASE_URL}'}\" >/usr/share/nginx/html/config.js;
@@ -61,13 +60,9 @@ services:
       timeout: 3s
       retries: 5
       start_period: 5s
-    restart: unless-stopped
     networks:
-      - cinema-net
-
-volumes:
-  cinema-db-data:
+      - cinema-dev-net
 
 networks:
-  cinema-net:
+  cinema-dev-net:
     driver: bridge
