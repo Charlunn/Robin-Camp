@@ -3,6 +3,11 @@
 ENV ?= dev
 COMPOSE_FILE := docker-compose.$(ENV).yml
 
+# 在解析阶段直接检查文件是否存在（跨 shell、跨平台）
+ifeq ($(strip $(wildcard $(COMPOSE_FILE))),)
+$(error Unknown environment '$(ENV)'. Expected file $(COMPOSE_FILE) to exist)
+endif
+
 ifeq ($(ENV),dev)
 DOWN_FLAGS ?= -v
 else
@@ -10,11 +15,9 @@ DOWN_FLAGS ?=
 endif
 
 docker-up:
-	@if [ ! -f $(COMPOSE_FILE) ]; then echo "Unknown environment '$(ENV)'. Expected a docker-compose.$(ENV).yml file." >&2; exit 1; fi
 	docker compose -f $(COMPOSE_FILE) up -d --build
 
 docker-down:
-	@if [ ! -f $(COMPOSE_FILE) ]; then echo "Unknown environment '$(ENV)'. Expected a docker-compose.$(ENV).yml file." >&2; exit 1; fi
 	docker compose -f $(COMPOSE_FILE) down $(DOWN_FLAGS)
 
 test-e2e:
