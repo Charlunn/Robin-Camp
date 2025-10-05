@@ -1,8 +1,8 @@
 package handler
 
 import (
-	"cinema/repository"
-	"cinema/service"
+	"cinema/internal/repository"
+	"cinema/internal/service"
 	"errors"
 	"fmt"
 	"log"

@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"cinema/model"
-	"cinema/repository"
-	"cinema/service"
+	"cinema/internal/model"
+	"cinema/internal/repository"
+	"cinema/internal/service"
 	"errors"
 	"log"
 	"net/http"

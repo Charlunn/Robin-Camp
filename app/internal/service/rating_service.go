@@ -1,8 +1,8 @@
 package service
 
 import (
-	"cinema/model"
-	"cinema/repository"
+	"cinema/internal/model"
+	"cinema/internal/repository"
 	"context"
 	"errors"
 	"math"

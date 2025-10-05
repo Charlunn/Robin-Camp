@@ -13,15 +13,15 @@ services:
       retries: 5
       start_period: 5s
     volumes:
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./internal/db/migrations:/docker-entrypoint-initdb.d:ro
     networks:
       - cinema-dev-net
 
   app:
     image: ${APP_IMAGE:-cinema-app:dev}
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: app/Dockerfile
     container_name: cinema-app-dev
     depends_on:
       db:

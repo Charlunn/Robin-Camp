@@ -1,12 +1,12 @@
 package main
 
 import (
-	"cinema/boxoffice"
-	"cinema/db"
-	"cinema/handler"
-	"cinema/handler/middleware"
-	"cinema/repository"
-	"cinema/service"
+	"cinema/internal/boxoffice"
+	"cinema/internal/db"
+	"cinema/internal/handler"
+	"cinema/internal/handler/middleware"
+	"cinema/internal/repository"
+	"cinema/internal/service"
 	"log"
 	"net/http"
 	"os"
@@ -86,10 +86,7 @@ func main() {
 	})
 
 	router.GET("/swagger.json", func(c *gin.Context) {
-		specPath := os.Getenv("OPENAPI_SPEC_PATH")
-		if specPath == "" {
-			specPath = "openapi.yml"
-		}
+		specPath := resolveOpenAPISpecPath()
 
 		data, err := os.ReadFile(specPath)
 		if err != nil {
@@ -136,4 +133,24 @@ func getEnvOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func resolveOpenAPISpecPath() string {
+	if specPath := os.Getenv("OPENAPI_SPEC_PATH"); specPath != "" {
+		return specPath
+	}
+
+	candidates := []string{
+		"api/specs/service.openapi.yml",
+		"../api/specs/service.openapi.yml",
+		"openapi.yml",
+	}
+
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+
+	return candidates[len(candidates)-1]
 }

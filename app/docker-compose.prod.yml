@@ -12,7 +12,7 @@ services:
       start_period: 5s
     volumes:
       - cinema-db-data:/var/lib/postgresql/data
-      - ./db/migrations:/docker-entrypoint-initdb.d:ro
+      - ./internal/db/migrations:/docker-entrypoint-initdb.d:ro
     restart: unless-stopped
     networks:
       - cinema-net
@@ -20,8 +20,8 @@ services:
   app:
     image: ${APP_IMAGE}
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: app/Dockerfile
     container_name: cinema-app
     depends_on:
       db:
