@@ -57,7 +57,7 @@ jobs:
     needs: build
     env:
       IMAGE_TAG: ${{ github.sha }}
-      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -89,49 +89,68 @@ jobs:
           docker push "$IMAGE_REF"
           echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
 
-      - name: Create deployment bundle
+      - name: Prepare deployment workspace
         shell: bash
         run: |
-          tar --exclude='.env' -czf cinema-deploy.tar.gz -C cinema .
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}"
+          mkdir -p "$DEPLOY_DIR"
+          rsync -a --delete --exclude '.git' --exclude '.github' --exclude '.env' "$GITHUB_WORKSPACE/cinema/" "$DEPLOY_DIR/"
+          echo "DEPLOY_DIR=$DEPLOY_DIR" >> "$GITHUB_ENV"
 
-      - name: Upload deployment bundle
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ env.DEPLOY_PORT }}
-          source: cinema-deploy.tar.gz
-          target: ${{ secrets.DEPLOY_PATH }}
+      - name: Ensure environment file exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          if [ ! -f "$DEPLOY_DIR/.env" ]; then
+            echo "A .env file with deployment secrets must exist in $DEPLOY_DIR" >&2
+            exit 1
+          fi
 
-      - name: Deploy on remote host
-        uses: appleboy/ssh-action@v0.1.7
-        env:
-          IMAGE_REF: ${{ env.IMAGE_REF }}
-          REGISTRY_USERNAME: ${{ env.REGISTRY_USERNAME }}
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          port: ${{ env.DEPLOY_PORT }}
-          script: |
-            set -euo pipefail
-            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
-            mkdir -p "$DEPLOY_DIR"
-            cd "$DEPLOY_DIR"
-            tar -xzf cinema-deploy.tar.gz
-            rm -f cinema-deploy.tar.gz
-            if [ -n "$IMAGE_REF" ]; then
-              if [ -f .env ]; then
-                sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$IMAGE_REF|" .env
-              else
-                echo "APP_IMAGE=$IMAGE_REF" > .env
-              fi
+      - name: Update deployment image reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          if grep -q '^APP_IMAGE=' "$DEPLOY_DIR/.env"; then
+            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${IMAGE_REF}|" "$DEPLOY_DIR/.env"
+          else
+            echo "APP_IMAGE=${IMAGE_REF}" >> "$DEPLOY_DIR/.env"
+          fi
+
+      - name: Deploy application
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$IMAGE_REF"
+          cd "$DEPLOY_DIR"
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -f
+
+      - name: Install E2E test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v jq >/dev/null 2>&1; then
+            if command -v sudo >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y jq
+            else
+              apt-get update
+              apt-get install -y jq
             fi
-            echo "Logging in to registry"
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
-            docker pull "$IMAGE_REF"
-            docker compose pull
-            docker compose up -d --remove-orphans
-            docker image prune -f
+          fi
+
+      - name: Run E2E tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          cd "$DEPLOY_DIR"
+          chmod +x ./e2e-test.sh
+          ./e2e-test.sh
 
