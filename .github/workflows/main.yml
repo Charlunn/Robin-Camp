@@ -140,6 +140,7 @@ jobs:
             exit 1
           fi
 
+          chmod +x ./e2e-test.sh
           if ! ENV_FILE=.env ./e2e-test.sh; then
             docker compose -f docker-compose.dev.yml logs
             exit 1
