@@ -69,6 +69,12 @@
     - 新增 .env.example（APP_PORT、DB_DSN、LOG_LEVEL、ENV、CORS 源等）
     - 程序读取 env；默认值保持与当前行为兼容
 
+## 部署前置条件
+
+- 在 GitHub Environment（或仓库级环境变量）中配置以下变量，确保工作流在推送容器镜像时复用统一的仓库信息：
+  - `REGISTRY_USERNAME`
+  - `IMAGE_NAME`
+
 交付物清单（新增为主）
 - 新接口的 Swagger 文档（swag 注释或 openapi.yml）
 - 统一响应结构与错误码枚举（仅用于新增接口）
