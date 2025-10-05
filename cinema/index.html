@@ -306,7 +306,34 @@
             }
         }
 
-        const configuredBaseUrl = normalizeBaseUrl(rawConfiguredBaseUrl);
+        function resolveConfiguredBaseUrl(rawUrl) {
+            if (!rawUrl) {
+                return '';
+            }
+
+            try {
+                const parsed = new URL(rawUrl, window.location && window.location.origin ? window.location.origin : undefined);
+
+                const pageLocation = window.location && window.location.hostname ? window.location : null;
+                const sameHost = pageLocation && parsed.hostname === pageLocation.hostname;
+                const hasExplicitPort = parsed.port !== '';
+
+                if (sameHost && !hasExplicitPort) {
+                    const derived = deriveDefaultApiBaseUrl();
+                    if (derived) {
+                        return derived;
+                    }
+                    parsed.port = '8080';
+                }
+
+                return normalizeBaseUrl(parsed.origin);
+            } catch (error) {
+                console.warn('提供的后端地址无效，将自动回退:', rawUrl, error);
+                return '';
+            }
+        }
+
+        const configuredBaseUrl = resolveConfiguredBaseUrl(rawConfiguredBaseUrl);
         const derivedBaseUrl = normalizeBaseUrl(deriveDefaultApiBaseUrl());
         const fallbackSameOrigin = (window.location && window.location.origin && window.location.origin !== 'null') ? normalizeBaseUrl(window.location.origin) : '';
         const API_BASE_URL = configuredBaseUrl || derivedBaseUrl || fallbackSameOrigin;

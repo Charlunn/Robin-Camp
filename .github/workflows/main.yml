@@ -108,6 +108,14 @@ jobs:
             fi
           fi
 
+      - name: Stop existing containers on runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(docker ps -q)" ]; then
+            docker stop $(docker ps -q)
+          fi
+
       - name: Run development E2E tests
         shell: bash
         run: |
@@ -191,7 +199,6 @@ jobs:
             BOXOFFICE_API_KEY_SECRET
             BOXOFFICE_URL_SECRET
             DB_URL_SECRET
-            FRONTEND_API_BASE_URL_SECRET
             PORT_SECRET
             POSTGRES_DB_SECRET
             POSTGRES_PASSWORD_SECRET
@@ -216,7 +223,7 @@ jobs:
             printf 'BOXOFFICE_API_KEY=%s\n' "${BOXOFFICE_API_KEY_SECRET}"
             printf 'BOXOFFICE_URL=%s\n' "${BOXOFFICE_URL_SECRET}"
             printf 'DB_URL=%s\n' "${DB_URL_SECRET}"
-            printf 'FRONTEND_API_BASE_URL=%s\n' "${FRONTEND_API_BASE_URL_SECRET}"
+            printf 'FRONTEND_API_BASE_URL=%s\n' "${FRONTEND_API_BASE_URL_SECRET:-}"
             printf 'IMAGE_NAME=%s\n' "${IMAGE_NAME_SECRET}"
             printf 'PORT=%s\n' "${PORT_SECRET}"
             printf 'POSTGRES_DB=%s\n' "${POSTGRES_DB_SECRET}"
