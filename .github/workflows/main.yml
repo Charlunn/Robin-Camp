@@ -2,10 +2,17 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+      - dev
   pull_request:
+    branches:
+      - main
+      - dev
 
 env:
   IMAGE_NAME: cinema-app
+  REGISTRY_USERNAME: charlunn
 
 jobs:
   build:
@@ -50,6 +57,7 @@ jobs:
     needs: build
     env:
       IMAGE_TAG: ${{ github.sha }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,57 +72,85 @@ jobs:
         shell: bash
         run: |
           gunzip -c artifacts/image.tar.gz | docker load
-          echo "APP_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-      - name: Install dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq postgresql-client
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare environment files
-        working-directory: cinema
-        shell: bash
-        run: |
-          sed -i 's/\r$//' .env
-          chmod +x e2e-test.sh
-
-      - name: Start application stack
-        working-directory: cinema
-        shell: bash
-        run: docker compose --project-name cinema-ci up -d --no-build
-
-      - name: Check frontend homepage is served by nginx
-        working-directory: cinema
+      - name: Push image to GitHub Container Registry
         shell: bash
         run: |
           set -euo pipefail
-          # Retry for up to ~30s until nginx is healthy and serving index.html
-          for i in {1..10}; do
-            if curl -sS http://localhost:80/ | grep -q '电影探索者'; then
-              echo "Frontend is up."
-              exit 0
+          IMAGE_REF="ghcr.io/${REGISTRY_USERNAME}/$IMAGE_NAME:${IMAGE_TAG}"
+          docker tag "$IMAGE_NAME:${IMAGE_TAG}" "$IMAGE_REF"
+          docker push "$IMAGE_REF"
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+
+      - name: Prepare deployment workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}"
+          mkdir -p "$DEPLOY_DIR"
+          rsync -a --delete --exclude '.git' --exclude '.github' --exclude '.env' "$GITHUB_WORKSPACE/cinema/" "$DEPLOY_DIR/"
+          echo "DEPLOY_DIR=$DEPLOY_DIR" >> "$GITHUB_ENV"
+
+      - name: Ensure environment file exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          if [ ! -f "$DEPLOY_DIR/.env" ]; then
+            echo "A .env file with deployment secrets must exist in $DEPLOY_DIR" >&2
+            exit 1
+          fi
+
+      - name: Update deployment image reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          if grep -q '^APP_IMAGE=' "$DEPLOY_DIR/.env"; then
+            sed -i "s|^APP_IMAGE=.*|APP_IMAGE=${IMAGE_REF}|" "$DEPLOY_DIR/.env"
+          else
+            echo "APP_IMAGE=${IMAGE_REF}" >> "$DEPLOY_DIR/.env"
+          fi
+
+      - name: Deploy application
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+          docker pull "$IMAGE_REF"
+          cd "$DEPLOY_DIR"
+          docker compose pull
+          docker compose up -d --remove-orphans
+          docker image prune -f
+
+      - name: Install E2E test dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v jq >/dev/null 2>&1; then
+            if command -v sudo >/dev/null 2>&1; then
+              sudo apt-get update
+              sudo apt-get install -y jq
+            else
+              apt-get update
+              apt-get install -y jq
             fi
-            echo "Waiting for frontend (attempt $i)..."
-            sleep 3
-          done
-          echo "Frontend check failed: index.html not served on http://localhost:80/"
-          exit 1
+          fi
 
       - name: Run E2E tests
-        working-directory: cinema
         shell: bash
-        run: ./e2e-test.sh
-
-      - name: Show logs on failure
-        if: failure()
-        working-directory: cinema
-        shell: bash
-        run: docker compose --project-name cinema-ci logs
-
-      - name: Tear down stack
-        if: always()
-        working-directory: cinema
-        shell: bash
-        run: docker compose --project-name cinema-ci down -v
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          cd "$DEPLOY_DIR"
+          chmod +x ./e2e-test.sh
+          ./e2e-test.sh
 
