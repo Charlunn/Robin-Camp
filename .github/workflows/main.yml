@@ -38,14 +38,14 @@ jobs:
 
       - name: Go vet
         run: go vet ./...
-        working-directory: cinema
+        working-directory: app
 
       - name: Run unit tests
         run: go test ./...
-        working-directory: cinema
+        working-directory: app
 
       - name: Build Docker image
-        run: docker build -t "$IMAGE_NAME:$IMAGE_TAG" -f cinema/Dockerfile cinema
+        run: docker build -t "$IMAGE_NAME:$IMAGE_TAG" -f app/Dockerfile .
 
       - name: Save Docker image artifact
         shell: bash
@@ -120,7 +120,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd cinema
+          cd app
           export APP_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
           docker compose -f docker-compose.dev.yml up -d --no-build
           cleanup() {
@@ -170,7 +170,7 @@ jobs:
           set -euo pipefail
           DEPLOY_DIR="${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}"
           mkdir -p "$DEPLOY_DIR"
-          rsync -a --delete --exclude '.git' --exclude '.github' --exclude '.env' "$GITHUB_WORKSPACE/cinema/" "$DEPLOY_DIR/"
+          rsync -a --delete --exclude '.git' --exclude '.github' --exclude '.env' "$GITHUB_WORKSPACE/app/" "$DEPLOY_DIR/"
           echo "DEPLOY_DIR=$DEPLOY_DIR" >> "$GITHUB_ENV"
 
       - name: Generate deployment environment file

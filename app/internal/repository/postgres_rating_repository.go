@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"cinema/model"
+	"cinema/internal/model"
 	"context"
 	"database/sql"
 )

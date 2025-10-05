@@ -1,9 +1,9 @@
 package service
 
 import (
-	"cinema/boxoffice"
-	"cinema/model"
-	"cinema/repository"
+	"cinema/internal/boxoffice"
+	"cinema/internal/model"
+	"cinema/internal/repository"
 	"context"
 	"strings"
 	"testing"

@@ -1,5 +1,6 @@
 *.sh text eol=lf
-cinema/*.sh text eol=lf
+app/*.sh text eol=lf
+scripts/*.sh text eol=lf
 
 *.env text eol=lf
-cinema/*.env text eol=lf
+app/*.env text eol=lf

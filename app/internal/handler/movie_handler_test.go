@@ -2,10 +2,10 @@ package handler
 
 import (
 	"bytes"
-	"cinema/boxoffice"
-	"cinema/model"
-	"cinema/repository"
-	"cinema/service"
+	"cinema/internal/boxoffice"
+	"cinema/internal/model"
+	"cinema/internal/repository"
+	"cinema/internal/service"
 	"context"
 	"net/http"
 	"net/http/httptest"

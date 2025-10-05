@@ -39,7 +39,7 @@
 ### 启动开发环境
 
 ```bash
-cd cinema
+cd app
 make docker-up             # 默认 ENV=dev，等价于 docker compose -f docker-compose.dev.yml up -d --build
 make test-e2e              # 使用同一套 .env 变量执行端到端测试
 make docker-down           # 会附带删除临时数据卷
@@ -48,7 +48,7 @@ make docker-down           # 会附带删除临时数据卷
 ### 启动生产环境
 
 ```bash
-cd cinema
+cd app
 make ENV=prod docker-up    # 使用 docker-compose.prod.yml，数据库挂载命名卷
 make ENV=prod docker-down  # 默认保留持久化卷，可通过 DOWN_FLAGS=-v 覆盖
 ```
@@ -135,7 +135,7 @@ make ENV=prod docker-down  # 默认保留持久化卷，可通过 DOWN_FLAGS=-v 
 ### 4.2 数据库迁移 (`golang-migrate`)
 
 1.  **安装工具**: `go install -tags 'mysql' ...`
-2.  **创建迁移文件**: `migrate create -ext sql -dir db/migrations ...`
+2.  **创建迁移文件**: `migrate create -ext sql -dir internal/db/migrations ...`
 3.  **编写 SQL**: 手动填充 `.up.sql` (迁移) 和 `.down.sql` (回滚) 文件。
 4.  **执行迁移**: `migrate -database '...' -path ... up`
 
