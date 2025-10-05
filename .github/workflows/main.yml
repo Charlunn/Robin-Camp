@@ -108,6 +108,14 @@ jobs:
             fi
           fi
 
+      - name: Stop existing containers on runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$(docker ps -q)" ]; then
+            docker stop $(docker ps -q)
+          fi
+
       - name: Run development E2E tests
         shell: bash
         run: |
