@@ -22,8 +22,8 @@ jobs:
       - name: Load registry configuration
         shell: bash
         run: |
-          echo "IMAGE_NAME=${{ vars.IMAGE_NAME || 'cinema' }}" >> "$GITHUB_ENV"
-          echo "REGISTRY_USERNAME=${{ vars.REGISTRY_USERNAME || github.repository_owner }}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=${{ toLower(vars.IMAGE_NAME || 'cinema') }}" >> "$GITHUB_ENV"
+          echo "REGISTRY_USERNAME=${{ toLower(vars.REGISTRY_USERNAME || github.repository_owner) }}" >> "$GITHUB_ENV"
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -67,8 +67,8 @@ jobs:
       - name: Load registry configuration
         shell: bash
         run: |
-          echo "IMAGE_NAME=${{ vars.IMAGE_NAME || 'cinema' }}" >> "$GITHUB_ENV"
-          echo "REGISTRY_USERNAME=${{ vars.REGISTRY_USERNAME || github.repository_owner }}" >> "$GITHUB_ENV"
+          echo "IMAGE_NAME=${{ toLower(vars.IMAGE_NAME || 'cinema') }}" >> "$GITHUB_ENV"
+          echo "REGISTRY_USERNAME=${{ toLower(vars.REGISTRY_USERNAME || github.repository_owner) }}" >> "$GITHUB_ENV"
 
       - name: Download image artifact
         uses: actions/download-artifact@v4
