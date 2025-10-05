@@ -11,8 +11,18 @@ info:
     - Rating aggregation returns `{average, count}`, with average rounded to **1 decimal place**.
     - List search supports `q | year | distributor | budget | mpaRating | genre | limit | cursor`, pagination response is fixed as `items[] + nextCursor`.
 servers:
-  - url: https://api.example.com
-  - url: http://localhost:8080
+  - url: "{scheme}://{hostname}:{port}"
+    description: Backend reachable on the same host as the frontend, defaulting to port 8080.
+    variables:
+      scheme:
+        default: http
+        enum: [http, https]
+      hostname:
+        default: backend-host
+        description: Deployment hostname.
+      port:
+        default: "8080"
+        description: Backend service port (defaults to 8080).
 tags:
   - name: Movies
   - name: Ratings
