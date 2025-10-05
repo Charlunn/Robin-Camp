@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,7 @@ func main() {
 	}
 
 	port := getEnvOrDefault("PORT", "8080")
+	appEnv := strings.ToLower(getEnvOrDefault("APP_ENV", "production"))
 	authToken := os.Getenv("AUTH_TOKEN")
 	if authToken == "" {
 		log.Fatal("AUTH_TOKEN must be provided for write operations")
@@ -65,7 +67,14 @@ func main() {
 	movieHandler := handler.NewMovieHandler(movieService)
 	ratingHandler := handler.NewRatingHandler(ratingService)
 
-	gin.SetMode(gin.ReleaseMode)
+	switch appEnv {
+	case "development", "dev":
+		gin.SetMode(gin.DebugMode)
+	case "test", "testing":
+		gin.SetMode(gin.TestMode)
+	default:
+		gin.SetMode(gin.ReleaseMode)
+	}
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
@@ -116,7 +125,7 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
-	log.Printf("server listening on port %s", port)
+	log.Printf("server listening on port %s (env=%s)", port, appEnv)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("server stopped unexpectedly: %v", err)
 	}
