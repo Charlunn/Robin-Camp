@@ -2,10 +2,17 @@ name: CI
 
 on:
   push:
+    branches:
+      - main
+      - dev
   pull_request:
+    branches:
+      - main
+      - dev
 
 env:
   IMAGE_NAME: cinema-app
+  REGISTRY_USERNAME: charlunn
 
 jobs:
   build:
@@ -50,6 +57,7 @@ jobs:
     needs: build
     env:
       IMAGE_TAG: ${{ github.sha }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -64,57 +72,66 @@ jobs:
         shell: bash
         run: |
           gunzip -c artifacts/image.tar.gz | docker load
-          echo "APP_IMAGE=${IMAGE_NAME}:${IMAGE_TAG}" >> "$GITHUB_ENV"
 
-      - name: Install dependencies
-        shell: bash
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq postgresql-client
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ env.REGISTRY_USERNAME }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Prepare environment files
-        working-directory: cinema
-        shell: bash
-        run: |
-          sed -i 's/\r$//' .env
-          chmod +x e2e-test.sh
-
-      - name: Start application stack
-        working-directory: cinema
-        shell: bash
-        run: docker compose --project-name cinema-ci up -d --no-build
-
-      - name: Check frontend homepage is served by nginx
-        working-directory: cinema
+      - name: Push image to GitHub Container Registry
         shell: bash
         run: |
           set -euo pipefail
-          # Retry for up to ~30s until nginx is healthy and serving index.html
-          for i in {1..10}; do
-            if curl -sS http://localhost:80/ | grep -q '电影探索者'; then
-              echo "Frontend is up."
-              exit 0
+          IMAGE_REF="ghcr.io/${REGISTRY_USERNAME}/$IMAGE_NAME:${IMAGE_TAG}"
+          docker tag "$IMAGE_NAME:${IMAGE_TAG}" "$IMAGE_REF"
+          docker push "$IMAGE_REF"
+          echo "IMAGE_REF=$IMAGE_REF" >> "$GITHUB_ENV"
+
+      - name: Create deployment bundle
+        shell: bash
+        run: |
+          tar --exclude='.env' -czf cinema-deploy.tar.gz -C cinema .
+
+      - name: Upload deployment bundle
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
+          source: cinema-deploy.tar.gz
+          target: ${{ secrets.DEPLOY_PATH }}
+
+      - name: Deploy on remote host
+        uses: appleboy/ssh-action@v0.1.7
+        env:
+          IMAGE_REF: ${{ env.IMAGE_REF }}
+          REGISTRY_USERNAME: ${{ env.REGISTRY_USERNAME }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ env.DEPLOY_PORT }}
+          script: |
+            set -euo pipefail
+            DEPLOY_DIR="${{ secrets.DEPLOY_PATH }}"
+            mkdir -p "$DEPLOY_DIR"
+            cd "$DEPLOY_DIR"
+            tar -xzf cinema-deploy.tar.gz
+            rm -f cinema-deploy.tar.gz
+            if [ -n "$IMAGE_REF" ]; then
+              if [ -f .env ]; then
+                sed -i "s|^APP_IMAGE=.*|APP_IMAGE=$IMAGE_REF|" .env
+              else
+                echo "APP_IMAGE=$IMAGE_REF" > .env
+              fi
             fi
-            echo "Waiting for frontend (attempt $i)..."
-            sleep 3
-          done
-          echo "Frontend check failed: index.html not served on http://localhost:80/"
-          exit 1
-
-      - name: Run E2E tests
-        working-directory: cinema
-        shell: bash
-        run: ./e2e-test.sh
-
-      - name: Show logs on failure
-        if: failure()
-        working-directory: cinema
-        shell: bash
-        run: docker compose --project-name cinema-ci logs
-
-      - name: Tear down stack
-        if: always()
-        working-directory: cinema
-        shell: bash
-        run: docker compose --project-name cinema-ci down -v
+            echo "Logging in to registry"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$REGISTRY_USERNAME" --password-stdin
+            docker pull "$IMAGE_REF"
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
 
