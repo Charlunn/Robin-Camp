@@ -116,6 +116,69 @@ jobs:
           rsync -a --delete --exclude '.git' --exclude '.github' --exclude '.env' "$GITHUB_WORKSPACE/cinema/" "$DEPLOY_DIR/"
           echo "DEPLOY_DIR=$DEPLOY_DIR" >> "$GITHUB_ENV"
 
+      - name: Generate deployment environment file
+        shell: bash
+        env:
+          APP_IMAGE_SECRET: ${{ secrets.APP_IMAGE }}
+          AUTH_TOKEN_SECRET: ${{ secrets.AUTH_TOKEN }}
+          BOXOFFICE_API_KEY_SECRET: ${{ secrets.BOXOFFICE_API_KEY }}
+          BOXOFFICE_URL_SECRET: ${{ secrets.BOXOFFICE_URL }}
+          DB_URL_SECRET: ${{ secrets.DB_URL }}
+          FRONTEND_API_BASE_URL_SECRET: ${{ secrets.FRONTEND_API_BASE_URL }}
+          IMAGE_NAME_SECRET: ${{ secrets.IMAGE_NAME }}
+          PORT_SECRET: ${{ secrets.PORT }}
+          POSTGRES_PORT_SECRET: ${{ secrets.POSTGRES_PORT }}
+          POSTGRES_DB_SECRET: ${{ secrets.POSTGRES_DB }}
+          POSTGRES_PASSWORD_SECRET: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_USER_SECRET: ${{ secrets.POSTGRES_USER }}
+          REGISTRY_USERNAME_SECRET: ${{ secrets.REGISTRY_USERNAME }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="${DEPLOY_DIR:-${DEPLOY_PATH:-$GITHUB_WORKSPACE/deploy}}"
+          ENV_FILE="$DEPLOY_DIR/.env"
+
+          REQUIRED_VARS=(
+            AUTH_TOKEN_SECRET
+            BOXOFFICE_API_KEY_SECRET
+            BOXOFFICE_URL_SECRET
+            DB_URL_SECRET
+            FRONTEND_API_BASE_URL_SECRET
+            PORT_SECRET
+            POSTGRES_DB_SECRET
+            POSTGRES_PASSWORD_SECRET
+            POSTGRES_USER_SECRET
+          )
+
+          MISSING=()
+          for VAR_NAME in "${REQUIRED_VARS[@]}"; do
+            if [ -z "${!VAR_NAME:-}" ]; then
+              MISSING+=("${VAR_NAME%_SECRET}")
+            fi
+          done
+
+          if [ "${#MISSING[@]}" -ne 0 ]; then
+            printf 'The following required secrets are missing: %s\n' "${MISSING[*]}" >&2
+            exit 1
+          fi
+
+          cat >"$ENV_FILE" <<EOF
+APP_IMAGE=${APP_IMAGE_SECRET}
+AUTH_TOKEN=${AUTH_TOKEN_SECRET}
+BOXOFFICE_API_KEY=${BOXOFFICE_API_KEY_SECRET}
+BOXOFFICE_URL=${BOXOFFICE_URL_SECRET}
+DB_URL=${DB_URL_SECRET}
+FRONTEND_API_BASE_URL=${FRONTEND_API_BASE_URL_SECRET}
+IMAGE_NAME=${IMAGE_NAME_SECRET}
+PORT=${PORT_SECRET}
+POSTGRES_DB=${POSTGRES_DB_SECRET}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD_SECRET}
+POSTGRES_PORT=${POSTGRES_PORT_SECRET:-5432}
+POSTGRES_USER=${POSTGRES_USER_SECRET}
+REGISTRY_USERNAME=${REGISTRY_USERNAME_SECRET}
+EOF
+
+          chmod 600 "$ENV_FILE"
+
       - name: Ensure environment file exists
         shell: bash
         run: |
