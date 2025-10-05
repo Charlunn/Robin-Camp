@@ -162,7 +162,7 @@
             <!-- 无结果提示 -->
             <div id="no-results" class="hidden text-center py-12">
                 <p class="text-gray-400 text-xl">😔 未找到符合条件的电影。</p>
-                <p class="text-gray-500 mt-2">请尝试更改您的搜索条件或检查后端服务是否运行在 **http://localhost:8080**。</p>
+                <p class="text-gray-500 mt-2">请尝试更改您的搜索条件或检查后端服务是否运行在 <span id="backend-url-hint" class="font-semibold"></span>。</p>
             </div>
         </section>
 
@@ -284,7 +284,64 @@
     <script src="config.js"></script>
     <script>
         // --- 全局配置 ---
-        const API_BASE_URL = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) || 'http://localhost:8080';
+        const rawConfiguredBaseUrl = (window.APP_CONFIG && window.APP_CONFIG.API_BASE_URL) ? window.APP_CONFIG.API_BASE_URL.trim() : '';
+
+        function normalizeBaseUrl(url) {
+            if (!url) return '';
+            return url.replace(/\/+$/, '');
+        }
+
+        function deriveDefaultApiBaseUrl() {
+            if (!window.location || !window.location.origin || window.location.origin === 'null') {
+                return '';
+            }
+
+            try {
+                const candidate = new URL(window.location.origin);
+                candidate.port = '8080';
+                return candidate.origin;
+            } catch (error) {
+                console.warn('无法推断默认的后端地址，将继续使用当前站点。', error);
+                return '';
+            }
+        }
+
+        function resolveConfiguredBaseUrl(rawUrl) {
+            if (!rawUrl) {
+                return '';
+            }
+
+            try {
+                const parsed = new URL(rawUrl, window.location && window.location.origin ? window.location.origin : undefined);
+
+                const pageLocation = window.location && window.location.hostname ? window.location : null;
+                const sameHost = pageLocation && parsed.hostname === pageLocation.hostname;
+                const hasExplicitPort = parsed.port !== '';
+
+                if (sameHost && !hasExplicitPort) {
+                    const derived = deriveDefaultApiBaseUrl();
+                    if (derived) {
+                        return derived;
+                    }
+                    parsed.port = '8080';
+                }
+
+                return normalizeBaseUrl(parsed.origin);
+            } catch (error) {
+                console.warn('提供的后端地址无效，将自动回退:', rawUrl, error);
+                return '';
+            }
+        }
+
+        const configuredBaseUrl = resolveConfiguredBaseUrl(rawConfiguredBaseUrl);
+        const derivedBaseUrl = normalizeBaseUrl(deriveDefaultApiBaseUrl());
+        const fallbackSameOrigin = (window.location && window.location.origin && window.location.origin !== 'null') ? normalizeBaseUrl(window.location.origin) : '';
+        const API_BASE_URL = configuredBaseUrl || derivedBaseUrl || fallbackSameOrigin;
+        const DEFAULT_BACKEND_DISPLAY = configuredBaseUrl || derivedBaseUrl || fallbackSameOrigin || '同源端口 8080';
+        const backendUrlHintElement = document.getElementById('backend-url-hint');
+        if (backendUrlHintElement) {
+            backendUrlHintElement.textContent = DEFAULT_BACKEND_DISPLAY;
+        }
         const API_MOVIES_ENDPOINT = '/movies';
         const PAGE_SIZE = 12; 
         const RATING_VALUES = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0];
@@ -381,7 +438,7 @@
             } catch (error) {
                 console.error('API Error:', error);
                 // 重点：当遇到网络错误（如 Failed to fetch）时，给出明确的 CORS/服务器检查提示
-                showCustomAlert(`搜索 API 请求失败。错误信息: ${error.message}。请检查后端服务 (http://localhost:8080) 是否运行正常，以及是否配置了 CORS 跨域访问策略。`);
+                showCustomAlert(`搜索 API 请求失败。错误信息: ${error.message}。请检查后端服务 (${DEFAULT_BACKEND_DISPLAY}) 是否运行正常，以及是否配置了 CORS 跨域访问策略。`);
                 return { items: [], nextCursor: null, error: error.message }; 
             }
         }
