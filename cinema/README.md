@@ -4,6 +4,7 @@
 
 ## 目录
 
+- [快速启动：开发 vs 生产 Compose](#快速启动开发-vs-生产-compose)
 - [第一部分：Go 语言核心概念](#第一部分go-语言核心概念)
   - [1.1 Go 的设计哲学：简化的 C？](#11-go-的设计哲学简化的-c)
   - [1.2 Go 基础语法快速参考](#12-go-基础语法快速参考)
@@ -23,6 +24,36 @@
   - [5.2 我的想法：`main.go` 的进一步解耦](#52-我的想法maingo-的进一步解耦)
 - [第六部分：开发工作流](#第六部分开发工作流)
   - [6.1 热重载：让开发更流畅](#61-热重载让开发更流畅)
+
+---
+
+## 快速启动：开发 vs 生产 Compose
+
+根据不同环境提供两套 Docker Compose 编排：
+
+| 环境 | Compose 文件 | 数据库持久化 | 对外暴露 | APP_ENV | 适用场景 |
+| :--- | :----------- | :----------- | :-------- | :------ | :------- |
+| 开发 / E2E | `docker-compose.dev.yml` | **否**，数据库生命周期与容器一致 | API 端口 8080、数据库 5432 暴露给宿主机调试 | `development` | 本地开发、CI 中的端到端测试 |
+| 生产 / 部署 | `docker-compose.prod.yml` 或默认的 `docker-compose.yml` | **是**，挂载命名卷 `cinema-db-data` | 仅暴露 API（8080）与前端（80），数据库仅在内部网络可达 | `production` | 持久化部署、CD 阶段 |
+
+### 启动开发环境
+
+```bash
+cd cinema
+make docker-up             # 默认 ENV=dev，等价于 docker compose -f docker-compose.dev.yml up -d --build
+make test-e2e              # 使用同一套 .env 变量执行端到端测试
+make docker-down           # 会附带删除临时数据卷
+```
+
+### 启动生产环境
+
+```bash
+cd cinema
+make ENV=prod docker-up    # 使用 docker-compose.prod.yml，数据库挂载命名卷
+make ENV=prod docker-down  # 默认保留持久化卷，可通过 DOWN_FLAGS=-v 覆盖
+```
+
+生产部署所需的 `.env` 由 CI/CD 工作流在服务器上生成，确保敏感配置不会泄露。开发环境沿用仓库中的 `.env` 模板，适合快速启动。新增的 `APP_ENV` 变量会被应用进程读取，用于切换 Gin 的运行模式以及在日志中标识当前环境。
 
 ---
 
